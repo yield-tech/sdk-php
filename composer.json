@@ -1,0 +1,33 @@
+{
+    "name": "yield-tech/sdk-php",
+    "description": "The official Yield SDK for PHP",
+    "type": "library",
+    "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "Yield",
+            "homepage": "https://www.paywithyield.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "YieldTech\\SdkPhp\\": "src/"
+        }
+    },
+    "require": {
+        "php": ">=8.1",
+        "psr/http-client": "^1.0",
+        "psr/http-client-implementation": "*",
+        "psr/http-factory": "^1.1",
+        "psr/http-factory-implementation": "*"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^10.5",
+        "friendsofphp/php-cs-fixer": "^3.70",
+        "guzzlehttp/guzzle": "^7.9",
+        "guzzlehttp/psr7": "^2.7",
+        "nyholm/psr7": "^1.8",
+        "symfony/http-client": "^6.4"
+    }
+}
