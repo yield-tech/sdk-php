@@ -2,13 +2,3 @@ parameters:
     level: 10
     paths:
         - src
-        - tests
-    ignoreErrors:
-        -
-            message: '#has parameter \$fromPayload with no value type specified in iterable type array.#'
-            path: src/Api/ApiClient.php
-        -
-            message: '#(constructor|Payload\(\)|from\(\)) expects \S+, mixed given.#'
-            paths:
-                - src/Types/*.php
-                - src/**/Types/*.php

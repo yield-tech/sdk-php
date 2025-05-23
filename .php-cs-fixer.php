@@ -7,9 +7,9 @@ $finder = (new PhpCsFixer\Finder())
 return (new PhpCsFixer\Config())
     ->setRules([
         '@PHP84Migration' => true,
-        // '@PER-CS2.0' => true,
+        '@PER-CS2.0' => true,
         '@Symfony' => true,
-        // '@Symfony:risky' => true,
+        '@Symfony:risky' => true,
         'yoda_style' => ['equal' => false, 'identical' => false, 'less_and_greater' => null],
     ])
     ->setFinder($finder)

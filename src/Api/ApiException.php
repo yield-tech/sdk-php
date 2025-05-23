@@ -6,19 +6,32 @@ namespace YieldTech\SdkPhp\Api;
 
 class ApiException extends \Exception
 {
-    private readonly ApiErrorDetails $details;
+    /** @var ApiResult<*> */
+    private readonly ApiResult $result;
 
-    public function __construct(ApiErrorDetails $details)
+    /**
+     * @param ApiResult<*> $result
+     */
+    public function __construct(ApiResult $result)
     {
-        // TODO: Provide a more descriptive error message,
-        // including the status code and previous exception (if any)
-        parent::__construct('Yield API error');
+        $error = $result->getError();
+        if ($error === null) {
+            throw new \InvalidArgumentException('Expected ApiResult failure, got success');
+        }
 
-        $this->details = $details;
+        $errorType = $error->getType();
+        $statusCode = $result->getStatusCode();
+
+        parent::__construct("Yield API error: {$errorType} [status_code={$statusCode}]");
+
+        $this->result = $result;
     }
 
-    public function getDetails(): ApiErrorDetails
+    /**
+     * @return ApiResult<*>
+     */
+    public function getResult(): ApiResult
     {
-        return $this->details;
+        return $this->result;
     }
 }

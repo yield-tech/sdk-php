@@ -4,29 +4,29 @@ declare(strict_types=1);
 
 namespace YieldTech\SdkPhp\Modules\Order;
 
-use YieldTech\SdkPhp\Api\ApiClient;
-use YieldTech\SdkPhp\Api\ApiResult;
-use YieldTech\SdkPhp\Modules\Order\Types\Order;
-use YieldTech\SdkPhp\Modules\Order\Types\OrderCreateParams;
+use YieldTech\SdkPhp\Modules\Order\Payloads\Order;
+use YieldTech\SdkPhp\Modules\Order\Payloads\OrderCreatePayload;
 
+/**
+ * @phpstan-import-type OrderCreateParams from OrderCreatePayload
+ */
 class OrderClient
 {
     public function __construct(
-        private readonly ApiClient $api,
+        private readonly OrderBaseClient $base,
     ) {
     }
 
-    /** @return ApiResult<Order> */
-    public function fetch(string $id): ApiResult
+    public function fetch(string $id): Order
     {
-        return $this->api->runQuery([Order::class, 'fromPayload'], "/order/fetch/{$id}");
+        return $this->base->fetch($id)->getData();
     }
 
-    /** @return ApiResult<Order> */
-    public function create(OrderCreateParams $params): ApiResult
+    /**
+     * @param OrderCreateParams $params
+     */
+    public function create(array $params): Order
     {
-        $payload = $params->buildPayload();
-
-        return $this->api->runCommand([Order::class, 'fromPayload'], '/order/create', $payload);
+        return $this->base->create($params)->getData();
     }
 }

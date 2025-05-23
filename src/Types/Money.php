@@ -7,27 +7,18 @@ namespace YieldTech\SdkPhp\Types;
 class Money implements MoneyInterface
 {
     public function __construct(
-        public readonly string $currencyCode,
-        public readonly string $value,
+        private readonly string $currencyCode,
+        private readonly string $value,
     ) {
-        // TODO: Validate
     }
 
-    // @phpstan-ignore missingType.iterableValue
-    public static function fromPayload(array $payload): self
+    public static function fromPayload(string $payload): self
     {
-        return new self(
-            $payload['currency_code'],
-            $payload['value'],
-        );
-    }
+        if (!preg_match('/^([A-Z]{3}) (-?\d+(?:\.\d+)?)$/', $payload, $m)) {
+            throw new \InvalidArgumentException("Invalid money: {$payload}");
+        }
 
-    public static function buildPayload(MoneyInterface $money): mixed
-    {
-        return [
-            'currency_code' => $money->getCurrencyCode(),
-            'value' => $money->getValue(),
-        ];
+        return new self(currencyCode: $m[1], value: $m[2]);
     }
 
     public function getCurrencyCode(): string

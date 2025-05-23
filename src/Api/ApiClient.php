@@ -6,42 +6,44 @@ namespace YieldTech\SdkPhp\Api;
 
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
+use YieldTech\SdkPhp\Utils\AssertUtils;
 use YieldTech\SdkPhp\Utils\Base64UrlUtils;
 use YieldTech\SdkPhp\Version;
 
+/**
+ * @phpstan-type ClientOptions array{
+ *   base_url?: string,
+ *   http_client?: ClientInterface,
+ *   http_factory?: RequestFactoryInterface&StreamFactoryInterface,
+ * }
+ */
 class ApiClient
 {
+    private readonly string $baseUrl;
+
+    private readonly string $apiKeyToken;
+    private readonly string $apiKeyHmacKey;
+
     private readonly ClientInterface $httpClient;
     private readonly RequestFactoryInterface&StreamFactoryInterface $httpFactory;
 
-    private readonly string $baseUrl;
-    private readonly bool $useSandbox;
-
-    private readonly string $apiKeyId;
-    private readonly string $apiKeySecretToken;
-    private readonly string $apiKeyHmacKey;
+    private readonly string $clientVersion;
 
     /**
-     * @param array{
-     *   base_url?: string,
-     *   force_sandbox?: bool,
-     *   http_client?: ClientInterface,
-     *   http_factory?: RequestFactoryInterface&StreamFactoryInterface,
-     * } $options
+     * @param ClientOptions $options
      */
-    public function __construct(string $apiKeyId, string $apiKeySecret, array $options = [])
+    public function __construct(string $apiKey, array $options = [])
     {
         $this->baseUrl = $options['base_url'] ?? 'https://integrate.withyield.com/api/v1';
-        $this->useSandbox = ($options['force_sandbox'] ?? false) || str_starts_with($apiKeyId, 'sb_');
 
-        $this->apiKeyId = $apiKeyId;
-        $secret_parts = explode('$', $apiKeySecret);
-        if (\count($secret_parts) !== 3 || $secret_parts[0] !== 'secret') {
-            throw new \Exception('Invalid API key secret');
+        $keyParts = explode('$', $apiKey);
+        if (\count($keyParts) !== 3) {
+            throw new \InvalidArgumentException('Invalid Yield API key');
         }
-        $this->apiKeySecretToken = $secret_parts[1];
-        $this->apiKeyHmacKey = Base64UrlUtils::decode($secret_parts[2]);
+        $this->apiKeyToken = "{$keyParts[0]}\${$keyParts[1]}";
+        $this->apiKeyHmacKey = Base64UrlUtils::decode($keyParts[2]);
 
         if (isset($options['http_client'])) {
             $this->httpClient = $options['http_client'];
@@ -62,106 +64,98 @@ class ApiClient
         } else {
             throw new \Exception('Could not find any PSR-17 HTTP factory');
         }
+
+        $this->clientVersion = Version::getClientVersion();
     }
 
     /**
      * @template T
      *
-     * @param callable(array): T     $fromPayload
-     * @param ?array<string, string> $params
+     * @param callable(array<string, mixed>): T $fromPayload
      *
      * @return ApiResult<T>
      */
-    public function runQuery(callable $fromPayload, string $path, ?array $params = null): mixed
+    public static function processResponse(ResponseInterface $response, callable $fromPayload): mixed
+    {
+        $statusCode = $response->getStatusCode();
+        $statusOk = 200 <= $statusCode && $statusCode <= 299;
+
+        $requestId = $response->getHeaderLine('X-Request-Id');
+
+        if (!$statusOk) {
+            $errorType = 'unexpected_error';
+            $payload = null;
+            try {
+                $body = $response->getBody()->getContents();
+                $payload = AssertUtils::assertAssociativeArray(json_decode($body, true));
+                if (isset($payload['error']) && \is_string($payload['error'])) {
+                    $errorType = $payload['error'];
+                }
+            } catch (\Exception $e) {
+                // ignore
+            }
+
+            // @phpstan-ignore return.type
+            return ApiResult::createFailure($statusCode, $requestId, $errorType, $payload);
+        }
+
+        try {
+            $body = $response->getBody()->getContents();
+            $payload = AssertUtils::assertAssociativeArray(json_decode($body, true));
+            $data = $fromPayload($payload);
+        } catch (\Exception $e) {
+            // @phpstan-ignore return.type
+            return ApiResult::createFailure($statusCode, $requestId, 'unexpected_payload', null);
+        }
+
+        return ApiResult::createSuccess($statusCode, $requestId, $data);
+    }
+
+    /**
+     * @param ?array<string, string> $params
+     */
+    public function runQuery(string $path, ?array $params = null): ResponseInterface
     {
         $fullPath = $path;
         if ($params !== null) {
             $fullPath .= '?'.http_build_query($params);
         }
 
-        return $this->call($fromPayload, 'GET', $fullPath, null);
+        return $this->callEndpoint('GET', $fullPath, null);
     }
 
-    /**
-     * @template T
-     *
-     * @param callable(array): T $fromPayload
-     *
-     * @return ApiResult<T>
-     */
-    public function runCommand(callable $fromPayload, string $path, mixed $reqPayload)
+    public function runCommand(string $path, mixed $payload): ResponseInterface
     {
-        return $this->call($fromPayload, 'POST', $path, $reqPayload);
+        return $this->callEndpoint('POST', $path, $payload);
     }
 
-    /**
-     * @template T
-     *
-     * @param callable(array): T $fromPayload
-     *
-     * @return ApiResult<T>
-     */
-    private function call(callable $fromPayload, string $method, string $path, mixed $reqPayload): mixed
+    public function buildSignature(string $path, ?string $body = null, ?int $now = null): string
+    {
+        $timestamp = gmdate('Y-m-d\TH:i:s\Z', $now ?? time());
+        $parts = $body === null ? [$timestamp, $path] : [$timestamp, $path, $body];
+        $message = implode("\n", $parts);
+        $signatureBytes = hash_hmac('sha512', $message, $this->apiKeyHmacKey, true);
+        $signatureB64 = Base64UrlUtils::encode($signatureBytes);
+
+        return implode('$', [$this->apiKeyToken, $timestamp, $signatureB64]);
+    }
+
+    private function callEndpoint(string $method, string $path, mixed $payload): ResponseInterface
     {
         $req = $this->httpFactory->createRequest($method, $this->baseUrl.$path);
 
-        $req = $req->withHeader('X-Yield-Client', self::getClientVersion());
+        $req = $req->withHeader('X-Yield-Client', $this->clientVersion);
 
-        if ($this->useSandbox) {
-            $req = $req->withHeader('X-Yield-Sandbox', '1');
-        }
-
-        $timestamp = gmdate('Y-m-d\TH:i:s\Z');
-        $chunks = [$timestamp, $path];
-
-        if ($reqPayload !== null) {
-            $reqBody = json_encode($reqPayload, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
-            $chunks[] = $reqBody;
-
+        $body = $payload === null ? null : json_encode($payload, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
+        if ($body !== null) {
             $req = $req
                 ->withHeader('Content-Type', 'application/json')
-                ->withBody($this->httpFactory->createStream($reqBody));
+                ->withBody($this->httpFactory->createStream($body));
         }
 
-        $messageString = implode("\n", $chunks);
-        $signatureBytes = hash_hmac('sha512', $messageString, $this->apiKeyHmacKey, true);
-        $signatureString = Base64UrlUtils::encode($signatureBytes);
-        $authData = implode('$', [
-            $this->apiKeyId,
-            $this->apiKeySecretToken,
-            $timestamp,
-            $signatureString,
-        ]);
-        $req = $req->withHeader('Authorization', "Yield-Sig {$authData}");
+        $signature = $this->buildSignature($path, $body);
+        $req = $req->withHeader('Authorization', "Yield-Sig {$signature}");
 
-        $response = $this->httpClient->sendRequest($req);
-        $statusCode = $response->getStatusCode();
-
-        $requestId = $response->getHeaderLine('X-Request-Id');
-
-        if (200 <= $statusCode && $statusCode <= 299) {
-            $body = $response->getBody()->getContents();
-            $payload = json_decode($body, true);
-            // @phpstan-ignore argument.type
-            $data = $fromPayload($payload);
-
-            return ApiResult::createSuccess($data, ['request_id' => $requestId]);
-        } else {
-            $error = new ApiErrorDetails($statusCode, $requestId);
-
-            // @phpstan-ignore return.type
-            return ApiResult::createFailure($error, ['request_id' => $requestId]);
-        }
-    }
-
-    private static function getClientVersion(): string
-    {
-        $sdkVersion = Version::NUMBER;
-
-        preg_match('/^\d+\.\d+?/', \PHP_VERSION, $m);
-        $phpVersion = $m[0] ?? null;
-        $platform = $phpVersion === null ? 'PHP' : "PHP {$phpVersion}";
-
-        return "Yield-SDK-PHP/{$sdkVersion} ({$platform})";
+        return $this->httpClient->sendRequest($req);
     }
 }

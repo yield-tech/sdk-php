@@ -4,27 +4,27 @@ declare(strict_types=1);
 
 namespace YieldTech\SdkPhp\Api;
 
-// TODO: Make this abstract once we properly handle the different error types
-class ApiErrorDetails
+final class ApiErrorDetails
 {
-    private readonly ?int $statusCode;
-    private readonly ?string $requestId;
-
+    /**
+     * @param ?array<string, mixed> $body
+     */
     public function __construct(
-        ?int $statusCode,
-        ?string $requestId,
+        private readonly string $type,
+        private readonly ?array $body,
     ) {
-        $this->statusCode = $statusCode;
-        $this->requestId = $requestId;
     }
 
-    public function getStatusCode(): ?int
+    public function getType(): string
     {
-        return $this->statusCode;
+        return $this->type;
     }
 
-    public function getRequestId(): ?string
+    /**
+     * @return ?array<string, mixed>
+     */
+    public function getBody(): ?array
     {
-        return $this->requestId;
+        return $this->body;
     }
 }

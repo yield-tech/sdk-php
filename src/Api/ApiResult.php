@@ -9,53 +9,51 @@ namespace YieldTech\SdkPhp\Api;
  */
 final class ApiResult
 {
-    private readonly ?string $requestId;
-
-    /** @var ?T */
-    private readonly mixed $data;
-    private readonly ?ApiErrorDetails $error;
-
     /** @param ?T $data */
     private function __construct(
-        ?string $requestId,
-        mixed $data,
-        ?ApiErrorDetails $error,
+        private readonly int $statusCode,
+        private readonly ?string $requestId,
+        private readonly mixed $data,
+        private readonly ?ApiErrorDetails $error,
     ) {
-        $this->requestId = $requestId;
-        $this->data = $data;
-        $this->error = $error;
     }
 
     /**
      * @template U
      *
-     * @param U                            $data
-     * @param array{ request_id?: string } $options
+     * @param U $data
      *
      * @return ApiResult<U>
      */
     public static function createSuccess(
+        int $statusCode,
+        ?string $requestId,
         mixed $data,
-        array $options = [],
     ): self {
         return new self(
-            $options['request_id'] ?? null,
+            $statusCode,
+            $requestId,
             $data,
             null,
         );
     }
 
     /**
-     * @param array{ request_id?: string } $options
+     * @param ?array<string, mixed> $errorBody
      *
      * @return ApiResult<*>
      */
     public static function createFailure(
-        ApiErrorDetails $error,
-        array $options = [],
+        int $statusCode,
+        ?string $requestId,
+        string $errorType,
+        ?array $errorBody,
     ): self {
+        $error = new ApiErrorDetails($errorType, $errorBody);
+
         return new self(
-            $options['request_id'] ?? null,
+            $statusCode,
+            $requestId,
             null,
             $error,
         );
@@ -64,6 +62,11 @@ final class ApiResult
     public function isOk(): bool
     {
         return $this->error === null;
+    }
+
+    public function getStatusCode(): int
+    {
+        return $this->statusCode;
     }
 
     public function getRequestId(): ?string
@@ -77,7 +80,7 @@ final class ApiResult
     public function getData(): mixed
     {
         if ($this->error !== null) {
-            throw new ApiException($this->error);
+            throw new ApiException($this);
         }
 
         // @phpstan-ignore return.type
