@@ -47,20 +47,20 @@ class ApiClient
 
         if (isset($options['http_client'])) {
             $this->httpClient = $options['http_client'];
-        } elseif (class_exists('GuzzleHttp\Client')) {
-            $this->httpClient = new \GuzzleHttp\Client();
         } elseif (class_exists('Symfony\Component\HttpClient\Psr18Client')) {
             $this->httpClient = new \Symfony\Component\HttpClient\Psr18Client();
+        } elseif (class_exists('GuzzleHttp\Client')) {
+            $this->httpClient = new \GuzzleHttp\Client();
         } else {
             throw new \Exception('Could not find any PSR-18 HTTP client');
         }
 
         if (isset($options['http_factory'])) {
             $this->httpFactory = $options['http_factory'];
-        } elseif (class_exists('GuzzleHttp\Psr7\HttpFactory')) {
-            $this->httpFactory = new \GuzzleHttp\Psr7\HttpFactory();
         } elseif (class_exists('Nyholm\Psr7\Factory\Psr17Factory')) {
             $this->httpFactory = new \Nyholm\Psr7\Factory\Psr17Factory();
+        } elseif (class_exists('GuzzleHttp\Psr7\HttpFactory')) {
+            $this->httpFactory = new \GuzzleHttp\Psr7\HttpFactory();
         } else {
             throw new \Exception('Could not find any PSR-17 HTTP factory');
         }

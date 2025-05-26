@@ -13,13 +13,13 @@ composer require yield-tech/sdk-php
 $client = new YieldTech\SdkPhp\Client(getenv('YIELD_API_KEY'));
 
 // fetch an existing order
-$order = $client->order->fetch("ord_...");
+$order = $client->order->fetch('ord_...');
 var_dump($order->customer->registeredName);
 
 // or create a new one
-$new_order = $client->order->create([
-    "customer_id" => "org_...",
-    "total_amount" => "PHP 1234.50",
-    "note" => "Test order from the PHP SDK!",
+$newOrder = $client->order->create([
+    'customer_id' => 'org_...',
+    'total_amount' => 'PHP 1234.50',
+    'note' => 'Test order from the PHP SDK!',
 ]);
 ```

@@ -6,7 +6,7 @@ namespace YieldTech\SdkPhp;
 
 final class Version
 {
-    public const NUMBER = '0.5.0';
+    public const NUMBER = '0.5.1';
 
     public static function getClientVersion(): string
     {
