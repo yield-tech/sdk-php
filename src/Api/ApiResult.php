@@ -48,8 +48,9 @@ final class ApiResult
         ?string $requestId,
         string $errorType,
         ?array $errorBody,
+        ?\Exception $exception,
     ): self {
-        $error = new ApiErrorDetails($errorType, $errorBody);
+        $error = new ApiErrorDetails($errorType, $errorBody, $exception);
 
         return new self(
             $statusCode,
@@ -80,10 +81,13 @@ final class ApiResult
     public function getData(): mixed
     {
         if ($this->error !== null) {
-            throw new ApiException($this);
+            throw new ApiException($this->statusCode, $this->requestId, $this->error);
         }
 
-        // @phpstan-ignore return.type
+        if ($this->data === null) {
+            throw new \Exception('Invalid API result: no error or data');
+        }
+
         return $this->data;
     }
 

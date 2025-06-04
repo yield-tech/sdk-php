@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace YieldTech\SdkPhp\Modules\Order\Payloads;
 
 use YieldTech\SdkPhp\Types\Money;
-use YieldTech\SdkPhp\Utils\AssertUtils;
+use YieldTech\SdkPhp\Utils\TypeUtils;
 
 final readonly class Order
 {
@@ -28,15 +28,15 @@ final readonly class Order
     public static function fromPayload(array $payload): self
     {
         return new self(
-            id: AssertUtils::assertString($payload['id'] ?? null),
-            orderNumber: AssertUtils::assertString($payload['order_number'] ?? null),
-            status: OrderStatus::from(AssertUtils::assertString($payload['status'] ?? null)),
-            customer: isset($payload['customer']) ? OrderCustomerInfo::fromPayload(AssertUtils::assertAssociativeArray($payload['customer'])) : null,
-            date: AssertUtils::assertDate($payload['date'] ?? null),
-            totalAmount: Money::fromPayload(AssertUtils::assertString($payload['total_amount'] ?? null)),
-            note: isset($payload['note']) ? AssertUtils::assertString($payload['note']) : null,
-            paymentLink: isset($payload['payment_link']) ? AssertUtils::assertString($payload['payment_link']) : null,
-            creationTime: AssertUtils::assertTime($payload['creation_time'] ?? null),
+            id: TypeUtils::expectString($payload['id'] ?? null),
+            orderNumber: TypeUtils::expectString($payload['order_number'] ?? null),
+            status: OrderStatus::from(TypeUtils::expectString($payload['status'] ?? null)),
+            customer: isset($payload['customer']) ? OrderCustomerInfo::fromPayload(TypeUtils::expectRecord($payload['customer'])) : null,
+            date: TypeUtils::expectDate($payload['date'] ?? null),
+            totalAmount: Money::fromPayload(TypeUtils::expectString($payload['total_amount'] ?? null)),
+            note: isset($payload['note']) ? TypeUtils::expectString($payload['note']) : null,
+            paymentLink: isset($payload['payment_link']) ? TypeUtils::expectString($payload['payment_link']) : null,
+            creationTime: TypeUtils::expectTime($payload['creation_time'] ?? null),
         );
     }
 }

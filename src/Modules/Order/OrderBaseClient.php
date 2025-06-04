@@ -24,7 +24,8 @@ class OrderBaseClient
      */
     public function fetch(string $id): ApiResult
     {
-        $response = $this->api->runQuery("/order/fetch/{$id}");
+        $encodedId = rawurlencode($id);
+        $response = $this->api->runQuery("/order/fetch/{$encodedId}");
 
         return ApiClient::processResponse($response, [Order::class, 'fromPayload']);
     }

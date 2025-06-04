@@ -7,12 +7,12 @@ namespace YieldTech\SdkPhp\Modules\Order\Payloads;
 use YieldTech\SdkPhp\Types\MoneyPayload;
 
 /**
- * @phpstan-import-type IntoMoneyPayload from MoneyPayload
+ * @phpstan-import-type MoneyLike from MoneyPayload
  *
  * @phpstan-type OrderCreateParams array{
  *   customer_id: string,
- *   total_amount: IntoMoneyPayload,
- *   note?: ?String,
+ *   total_amount: MoneyLike,
+ *   note?: ?string,
  * }
  */
 class OrderCreatePayload

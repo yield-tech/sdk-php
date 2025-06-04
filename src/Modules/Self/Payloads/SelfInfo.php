@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace YieldTech\SdkPhp\Modules\Self\Payloads;
 
-use YieldTech\SdkPhp\Utils\AssertUtils;
+use YieldTech\SdkPhp\Utils\TypeUtils;
 
 final readonly class SelfInfo
 {
@@ -21,9 +21,9 @@ final readonly class SelfInfo
     public static function fromPayload(array $payload): self
     {
         return new self(
-            id: AssertUtils::assertString($payload['id'] ?? null),
-            name: AssertUtils::assertString($payload['name'] ?? null),
-            organization: SelfOrganizationInfo::fromPayload(AssertUtils::assertAssociativeArray($payload['organization'] ?? null)),
+            id: TypeUtils::expectString($payload['id'] ?? null),
+            name: TypeUtils::expectString($payload['name'] ?? null),
+            organization: SelfOrganizationInfo::fromPayload(TypeUtils::expectRecord($payload['organization'] ?? null)),
         );
     }
 }

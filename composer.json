@@ -1,7 +1,6 @@
 {
     "name": "yield-tech/sdk-php",
     "description": "The official Yield SDK for PHP",
-    "type": "library",
     "license": "Apache-2.0",
     "authors": [
         {
@@ -9,6 +8,8 @@
             "homepage": "https://www.paywithyield.com"
         }
     ],
+    "homepage": "https://github.com/yield-tech/sdk-php/blob/main/README.md",
+    "type": "library",
     "autoload": {
         "psr-4": {
             "YieldTech\\SdkPhp\\": "src/"

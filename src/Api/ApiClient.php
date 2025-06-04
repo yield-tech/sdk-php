@@ -8,8 +8,8 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
-use YieldTech\SdkPhp\Utils\AssertUtils;
 use YieldTech\SdkPhp\Utils\Base64UrlUtils;
+use YieldTech\SdkPhp\Utils\TypeUtils;
 use YieldTech\SdkPhp\Version;
 
 /**
@@ -37,35 +37,56 @@ class ApiClient
     public function __construct(string $apiKey, array $options = [])
     {
         $this->baseUrl = $options['base_url'] ?? 'https://integrate.withyield.com/api/v1';
+        [$this->apiKeyToken, $this->apiKeyHmacKey] = self::extractApiKey($apiKey);
+        $this->httpClient = $options['http_client'] ?? self::findHttpClient();
+        $this->httpFactory = $options['http_factory'] ?? self::findHttpFactory();
+        $this->clientVersion = Version::getClientVersion();
+    }
 
-        $keyParts = explode('$', $apiKey);
+    /** @return array{string, string} */
+    public static function extractApiKey(string $key): array
+    {
+        // "$" is the old separator, supported for backwards compatibility
+        $keyParts = explode(':', str_replace('$', ':', $key));
         if (\count($keyParts) !== 3) {
             throw new \InvalidArgumentException('Invalid Yield API key');
         }
-        $this->apiKeyToken = "{$keyParts[0]}\${$keyParts[1]}";
-        $this->apiKeyHmacKey = Base64UrlUtils::decode($keyParts[2]);
 
-        if (isset($options['http_client'])) {
-            $this->httpClient = $options['http_client'];
-        } elseif (class_exists('Symfony\Component\HttpClient\Psr18Client')) {
-            $this->httpClient = new \Symfony\Component\HttpClient\Psr18Client();
+        $token = "{$keyParts[0]}\${$keyParts[1]}";
+        $hmacKey = Base64UrlUtils::decode($keyParts[2]);
+
+        return [$token, $hmacKey];
+    }
+
+    public static function findHttpClient(): ClientInterface
+    {
+        if (class_exists('Symfony\Component\HttpClient\Psr18Client')) {
+            return new \Symfony\Component\HttpClient\Psr18Client();
         } elseif (class_exists('GuzzleHttp\Client')) {
-            $this->httpClient = new \GuzzleHttp\Client();
+            return new \GuzzleHttp\Client();
         } else {
             throw new \Exception('Could not find any PSR-18 HTTP client');
         }
+    }
 
-        if (isset($options['http_factory'])) {
-            $this->httpFactory = $options['http_factory'];
-        } elseif (class_exists('Nyholm\Psr7\Factory\Psr17Factory')) {
-            $this->httpFactory = new \Nyholm\Psr7\Factory\Psr17Factory();
+    public static function findHttpFactory(): RequestFactoryInterface&StreamFactoryInterface
+    {
+        if (class_exists('Nyholm\Psr7\Factory\Psr17Factory')) {
+            return new \Nyholm\Psr7\Factory\Psr17Factory();
         } elseif (class_exists('GuzzleHttp\Psr7\HttpFactory')) {
-            $this->httpFactory = new \GuzzleHttp\Psr7\HttpFactory();
+            return new \GuzzleHttp\Psr7\HttpFactory();
         } else {
             throw new \Exception('Could not find any PSR-17 HTTP factory');
         }
+    }
 
-        $this->clientVersion = Version::getClientVersion();
+    public function buildSignature(string $hmacKey, string $timestamp, string $path, ?string $body = null): string
+    {
+        $parts = $body === null ? [$timestamp, $path] : [$timestamp, $path, $body];
+        $message = implode("\n", $parts);
+        $sigBytes = hash_hmac('sha512', $message, $hmacKey, true);
+
+        return Base64UrlUtils::encode($sigBytes);
     }
 
     /**
@@ -87,7 +108,7 @@ class ApiClient
             $payload = null;
             try {
                 $body = $response->getBody()->getContents();
-                $payload = AssertUtils::assertAssociativeArray(json_decode($body, true));
+                $payload = TypeUtils::expectRecord(json_decode($body, true));
                 if (isset($payload['error']) && \is_string($payload['error'])) {
                     $errorType = $payload['error'];
                 }
@@ -96,29 +117,32 @@ class ApiClient
             }
 
             // @phpstan-ignore return.type
-            return ApiResult::createFailure($statusCode, $requestId, $errorType, $payload);
+            return ApiResult::createFailure($statusCode, $requestId, $errorType, $payload, null);
         }
 
         try {
             $body = $response->getBody()->getContents();
-            $payload = AssertUtils::assertAssociativeArray(json_decode($body, true));
+            $payload = TypeUtils::expectRecord(json_decode($body, true));
             $data = $fromPayload($payload);
         } catch (\Exception $e) {
             // @phpstan-ignore return.type
-            return ApiResult::createFailure($statusCode, $requestId, 'unexpected_payload', null);
+            return ApiResult::createFailure($statusCode, $requestId, 'invalid_response', null, $e);
         }
 
         return ApiResult::createSuccess($statusCode, $requestId, $data);
     }
 
     /**
-     * @param ?array<string, string> $params
+     * @param ?array<string, string|int|null> $params
      */
     public function runQuery(string $path, ?array $params = null): ResponseInterface
     {
         $fullPath = $path;
         if ($params !== null) {
-            $fullPath .= '?'.http_build_query($params);
+            $queryString = http_build_query($params);
+            if ($queryString !== '') {
+                $fullPath .= '?'.$queryString;
+            }
         }
 
         return $this->callEndpoint('GET', $fullPath, null);
@@ -127,17 +151,6 @@ class ApiClient
     public function runCommand(string $path, mixed $payload): ResponseInterface
     {
         return $this->callEndpoint('POST', $path, $payload);
-    }
-
-    public function buildSignature(string $path, ?string $body = null, ?int $now = null): string
-    {
-        $timestamp = gmdate('Y-m-d\TH:i:s\Z', $now ?? time());
-        $parts = $body === null ? [$timestamp, $path] : [$timestamp, $path, $body];
-        $message = implode("\n", $parts);
-        $signatureBytes = hash_hmac('sha512', $message, $this->apiKeyHmacKey, true);
-        $signatureB64 = Base64UrlUtils::encode($signatureBytes);
-
-        return implode('$', [$this->apiKeyToken, $timestamp, $signatureB64]);
     }
 
     private function callEndpoint(string $method, string $path, mixed $payload): ResponseInterface
@@ -153,8 +166,9 @@ class ApiClient
                 ->withBody($this->httpFactory->createStream($body));
         }
 
-        $signature = $this->buildSignature($path, $body);
-        $req = $req->withHeader('Authorization', "Yield-Sig {$signature}");
+        $timestamp = gmdate('Y-m-d\TH:i:s\Z', time());
+        $signature = self::buildSignature($this->apiKeyHmacKey, $timestamp, $path, $body);
+        $req = $req->withHeader('Authorization', "Yield-Sig {$this->apiKeyToken}\${$timestamp}\${$signature}");
 
         return $this->httpClient->sendRequest($req);
     }

@@ -6,32 +6,44 @@ namespace YieldTech\SdkPhp\Api;
 
 class ApiException extends \Exception
 {
-    /** @var ApiResult<*> */
-    private readonly ApiResult $result;
+    public function __construct(
+        private readonly int $statusCode,
+        private readonly ?string $requestId,
+        private readonly ApiErrorDetails $error,
+    ) {
+        $errorInfo = $error->getType();
 
-    /**
-     * @param ApiResult<*> $result
-     */
-    public function __construct(ApiResult $result)
-    {
-        $error = $result->getError();
-        if ($error === null) {
-            throw new \InvalidArgumentException('Expected ApiResult failure, got success');
+        if ($error->getType() === 'validation_error' && $error->getBody() !== null) {
+            $issues = json_encode($error->getBody()['issues'], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+            $errorInfo = "{$errorInfo} {$issues}";
         }
 
-        $errorType = $error->getType();
-        $statusCode = $result->getStatusCode();
+        if ($error->getException() !== null) {
+            $message = json_encode($error->getException()->getMessage(), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE);
+            $errorInfo = "{$errorInfo} {$message}";
+        }
 
-        parent::__construct("Yield API error: {$errorType} [status_code={$statusCode}]");
+        $idValue = $requestId ?? '<none>';
+        $extraInfo = implode('; ', [
+            "status_code={$statusCode}",
+            "request_id={$idValue}",
+        ]);
 
-        $this->result = $result;
+        parent::__construct("Yield API error: {$errorInfo} [{$extraInfo}]", 0, $error->getException());
     }
 
-    /**
-     * @return ApiResult<*>
-     */
-    public function getResult(): ApiResult
+    public function getStatusCode(): int
     {
-        return $this->result;
+        return $this->statusCode;
+    }
+
+    public function getRequestId(): ?string
+    {
+        return $this->requestId;
+    }
+
+    public function getDetails(): ApiErrorDetails
+    {
+        return $this->error;
     }
 }

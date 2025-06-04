@@ -12,6 +12,7 @@ final class ApiErrorDetails
     public function __construct(
         private readonly string $type,
         private readonly ?array $body,
+        private readonly ?\Exception $exception,
     ) {
     }
 
@@ -26,5 +27,10 @@ final class ApiErrorDetails
     public function getBody(): ?array
     {
         return $this->body;
+    }
+
+    public function getException(): ?\Exception
+    {
+        return $this->exception;
     }
 }

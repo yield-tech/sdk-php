@@ -15,7 +15,7 @@ class Money implements MoneyInterface
     public static function fromPayload(string $payload): self
     {
         if (!preg_match('/^([A-Z]{3}) (-?\d+(?:\.\d+)?)$/', $payload, $m)) {
-            throw new \InvalidArgumentException("Invalid money: {$payload}");
+            throw new \InvalidArgumentException("Invalid money: \"{$payload}\"");
         }
 
         return new self(currencyCode: $m[1], value: $m[2]);
